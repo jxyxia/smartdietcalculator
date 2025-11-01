@@ -84,24 +84,30 @@ export default function ProgressScreen() {
         {/* Weight Tracking */}
         <View className="px-6 mb-6">
           <View className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-            <Text className="text-lg font-semibold text-gray-900 mb-4">Weight Progress</Text>
+            <Text className="text-lg font-semibold text-gray-900 mb-6">Weight Progress</Text>
             
-            <View className="flex-row items-end justify-between h-40 mb-4">
-              {weightData.map((data, index) => {
-                const heightPercentage = (data.weight / maxWeight) * 100;
-                return (
-                  <View key={index} className="flex-1 items-center">
-                    <View className="w-full items-center mb-2">
-                      <Text className="text-sm font-semibold text-gray-900">{data.weight}</Text>
+            <View className="mb-6">
+              <View className="flex-row items-end justify-between h-48">
+                {weightData.map((data, index) => {
+                  const heightPercentage = (data.weight / maxWeight) * 100;
+                  return (
+                    <View key={index} className="flex-1 items-center justify-end" style={{ height: '100%' }}>
+                      <Text className="text-sm font-semibold text-gray-900 mb-2">{data.weight}</Text>
+                      <View 
+                        className="w-12 bg-emerald-500 rounded-t-lg"
+                        style={{ height: `${heightPercentage}%` }}
+                      />
                     </View>
-                    <View 
-                      className="w-12 bg-emerald-500 rounded-t-lg"
-                      style={{ height: `${heightPercentage}%` }}
-                    />
-                    <Text className="text-xs text-gray-500 mt-2">{data.week}</Text>
+                  );
+                })}
+              </View>
+              <View className="flex-row justify-between mt-3 px-1">
+                {weightData.map((data, index) => (
+                  <View key={index} className="flex-1 items-center">
+                    <Text className="text-xs text-gray-500">{data.week}</Text>
                   </View>
-                );
-              })}
+                ))}
+              </View>
             </View>
             
             <TouchableOpacity 
