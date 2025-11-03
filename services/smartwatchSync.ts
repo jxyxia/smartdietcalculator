@@ -24,6 +24,9 @@ class SmartwatchSyncService {
     deviceName: 'No device connected'
   };
 
+  private currentSteps: number = 8547;
+  private currentCalories: number = 430;
+
   async connectDevice(): Promise<boolean> {
     return new Promise((resolve) => {
       // Simulate connection delay
@@ -51,10 +54,16 @@ class SmartwatchSyncService {
 
     return new Promise((resolve) => {
       setTimeout(() => {
-        // Simulate fetching health data
+        // Increment steps by 10-15 only
+        const stepsIncrement = Math.floor(Math.random() * 6) + 10; // 10-15
+        const caloriesIncrement = Math.floor(Math.random() * 5) + 3; // 3-7
+        
+        this.currentSteps += stepsIncrement;
+        this.currentCalories += caloriesIncrement;
+        
         const data: HealthData = {
-          steps: Math.floor(Math.random() * 5000) + 5000,
-          calories: Math.floor(Math.random() * 300) + 200,
+          steps: this.currentSteps,
+          calories: this.currentCalories,
           heartRate: Math.floor(Math.random() * 40) + 60,
           distance: Math.floor(Math.random() * 5) + 2,
           activeMinutes: Math.floor(Math.random() * 60) + 30
@@ -64,7 +73,7 @@ class SmartwatchSyncService {
         
         Alert.alert(
           'Sync Complete!',
-          `Updated: ${data.steps} steps, ${data.calories} calories burned`,
+          `Updated: ${data.steps} steps (+${stepsIncrement}), ${data.calories} calories burned`,
           [{ text: 'OK' }]
         );
         
@@ -88,6 +97,12 @@ class SmartwatchSyncService {
 
   isConnected(): boolean {
     return this.syncStatus.isConnected;
+  }
+
+  // Method to set initial values from the UI
+  setCurrentValues(steps: number, calories: number): void {
+    this.currentSteps = steps;
+    this.currentCalories = calories;
   }
 }
 

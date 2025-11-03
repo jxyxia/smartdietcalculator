@@ -29,6 +29,8 @@ export default function ActivityScreen() {
   useEffect(() => {
     const status = smartwatchSync.getSyncStatus();
     setIsConnected(status.isConnected);
+    // Set initial values in the sync service
+    smartwatchSync.setCurrentValues(steps, caloriesBurned);
   }, []);
 
   const handleConnectWatch = async () => {
@@ -91,7 +93,7 @@ export default function ActivityScreen() {
         </View>
 
         {/* Steps Card */}
-        <View className="px-6 mb-6">
+        <View className="px-6 mb-4">
           <View className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
             <View className="flex-row items-center justify-between mb-4">
               <View className="flex-row items-center">
@@ -147,8 +149,8 @@ export default function ActivityScreen() {
         </View>
 
         {/* Calories Burned */}
-        <View className="px-6 mb-6">
-          <View className="bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl p-6">
+        <View className="px-6 mb-4">
+          <View className="bg-orange-500 rounded-2xl p-6">
             <View className="flex-row items-center justify-between">
               <View>
                 <Text className="text-white/80 text-sm mb-1">Total Calories Burned</Text>
