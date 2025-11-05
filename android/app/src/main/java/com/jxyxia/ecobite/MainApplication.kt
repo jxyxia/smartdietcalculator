@@ -1,4 +1,4 @@
-package com.ecobite
+package com.jxyxia.ecobite
 
 import android.app.Application
 import android.content.res.Configuration
