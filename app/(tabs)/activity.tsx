@@ -1,9 +1,29 @@
-import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  ScrollView, 
+  TouchableOpacity, 
+  Alert, 
+  ActivityIndicator 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Footprints, Dumbbell, Plus, Watch, RefreshCw } from 'lucide-react-native';
-import { useState, useEffect } from 'react';
-import { smartwatchSync, HealthData } from '@/services/smartwatchSync';
-import AddExerciseModal from '@/components/AddExerciseModal';
+import { 
+  Footprints, 
+  Dumbbell, 
+  Plus, 
+  Watch, 
+  RefreshCw, 
+  Settings, 
+  ChevronRight 
+} from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+
+// Make sure this path resolves correctly:
+import { smartwatchSync, HealthData } from '../../services/smartwatchSync';
+
+import AddExerciseModal from '../../components/AddExerciseModal';
 
 interface Exercise {
   name: string;
@@ -12,7 +32,15 @@ interface Exercise {
   time: string;
 }
 
+/** Input shape coming from the modal (no time) */
+type NewExerciseInput = {
+  name: string;
+  duration: number;
+  calories: number;
+};
+
 export default function ActivityScreen() {
+  const router = useRouter();
   const [exercises, setExercises] = useState<Exercise[]>([
     { name: 'Morning Run', duration: 30, calories: 250, time: '7:00 AM' },
     { name: 'Weight Training', duration: 45, calories: 180, time: '6:00 PM' },
@@ -22,78 +50,150 @@ export default function ActivityScreen() {
   const [isConnected, setIsConnected] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
+  const [isSmartWatchConnected, setIsSmartWatchConnected] = useState(false);
+  const [connectedDeviceName, setConnectedDeviceName] = useState('');
+  const [hasSeenSmartWatchBanner, setHasSeenSmartWatchBanner] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState('2m ago');
 
   const stepsGoal = 10000;
   const stepsPercentage = (steps / stepsGoal) * 100;
 
   useEffect(() => {
-    const status = smartwatchSync.getSyncStatus();
-    setIsConnected(status.isConnected);
-    // Set initial values in the sync service
-    smartwatchSync.setCurrentValues(steps, caloriesBurned);
+    const status = smartwatchSync.getSyncStatus?.();
+    if (status) setIsConnected(status.isConnected);
+
+    smartwatchSync.setCurrentValues?.(steps, caloriesBurned);
+    checkSmartWatchConnection();
+    loadBannerPreference();
   }, []);
+
+  const checkSmartWatchConnection = async () => {
+    try {
+      const connected = await AsyncStorage.getItem('connected_bluetooth_devices');
+      if (connected) {
+        const devices = JSON.parse(connected);
+        if (devices.length > 0) {
+          setIsSmartWatchConnected(true);
+          setConnectedDeviceName(devices[0].name || 'Smartwatch');
+        }
+      }
+    } catch (error) {
+      console.error('Check connection error:', error);
+    }
+  };
+
+  const loadBannerPreference = async () => {
+    try {
+      const seen = await AsyncStorage.getItem('smartwatch_banner_seen');
+      setHasSeenSmartWatchBanner(seen === 'true');
+    } catch (error) {
+      console.error('Load banner preference error:', error);
+    }
+  };
 
   const handleConnectWatch = async () => {
     if (isConnected) {
-      smartwatchSync.disconnectDevice();
+      smartwatchSync.disconnectDevice?.();
       setIsConnected(false);
     } else {
       setIsSyncing(true);
-      const connected = await smartwatchSync.connectDevice();
-      setIsConnected(connected);
+      const connected = await smartwatchSync.connectDevice?.();
+      setIsConnected(!!connected);
       setIsSyncing(false);
     }
   };
 
   const handleSyncData = async () => {
-    if (!isConnected) {
+    if (!isConnected && !isSmartWatchConnected) {
       Alert.alert('Not Connected', 'Please connect your smartwatch first');
       return;
     }
 
     setIsSyncing(true);
     try {
-      const healthData: HealthData = await smartwatchSync.syncHealthData();
-      setSteps(healthData.steps);
-      setCaloriesBurned(healthData.calories);
+      const healthData: HealthData = await smartwatchSync.syncHealthData?.();
+      if (healthData) {
+        setSteps(healthData.steps);
+        setCaloriesBurned(healthData.calories);
+        setLastSyncTime('Just now');
+      }
     } catch (error) {
-      // Error already handled in service
+      console.error('Sync error:', error);
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const handleAddExercise = (exercise: Exercise) => {
+  const refreshActivityData = () => {
+    checkSmartWatchConnection();
+    handleSyncData();
+  };
+
+  /**
+   * Now accepts the input from the modal (no `time`).
+   * Builds the full Exercise object including `time`.
+   */
+  const handleAddExercise = (input: NewExerciseInput) => {
     const now = new Date();
     const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    
-    setExercises([...exercises, { ...exercise, time }]);
-    setCaloriesBurned(caloriesBurned + exercise.calories);
-    Alert.alert('Success', `${exercise.name} logged successfully!`);
+    const newExercise: Exercise = { ...input, time };
+    setExercises(prev => [...prev, newExercise]);
+    setCaloriesBurned(prev => prev + input.calories);
+    Alert.alert('Success', `${input.name} logged successfully!`);
   };
 
   const handleQuickAdd = (activity: string) => {
-    Alert.alert(
-      'Quick Add',
-      `Add ${activity} to your exercise log?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Add', onPress: () => setAddExerciseModalVisible(true) }
-      ]
-    );
+    Alert.alert('Quick Add', `Add ${activity} to your exercise log?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Add', onPress: () => setAddExerciseModalVisible(true) },
+    ]);
   };
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View className="px-6 pt-4 pb-6">
-          <Text className="text-3xl font-bold text-gray-900">Activity</Text>
-          <Text className="text-sm text-gray-500 mt-1">Track your daily movement</Text>
+        <View className="bg-white">
+          <View className="flex-row justify-between items-center px-6 py-4 border-b border-gray-200">
+            <View>
+              <Text className="text-2xl font-bold text-gray-900">Activity</Text>
+              <Text className="text-gray-600 text-sm mt-0.5">Track your daily movement</Text>
+            </View>
+
+            <View className="flex-row items-center">
+              <TouchableOpacity
+                onPress={refreshActivityData}
+                className="w-10 h-10 items-center justify-center mr-2"
+                activeOpacity={0.7}
+              >
+                <RefreshCw size={22} color="#6B7280" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                // cast to any to satisfy strict route literal types
+                onPress={() => router.push('/features/smartwatch-connect' as any)}
+                className="w-10 h-10 items-center justify-center relative mr-2"
+                activeOpacity={0.7}
+              >
+                <Watch size={22} color={isSmartWatchConnected ? '#10B981' : '#6B7280'} />
+                {isSmartWatchConnected && (
+                  <View className="absolute top-1 right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => router.push('/settings' as any)}
+                className="w-10 h-10 items-center justify-center"
+                activeOpacity={0.7}
+              >
+                <Settings size={22} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         {/* Steps Card */}
-        <View className="px-6 mb-4">
+        <View className="px-6 mb-4 mt-6">
           <View className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
             <View className="flex-row items-center justify-between mb-4">
               <View className="flex-row items-center">
@@ -105,39 +205,34 @@ export default function ActivityScreen() {
                   <Text className="text-sm text-gray-500">{stepsGoal.toLocaleString()} goal</Text>
                 </View>
               </View>
-              <View className="flex-row gap-2">
+              <View className="flex-row items-center">
+                {isSmartWatchConnected && (
+                  <View className="bg-green-100 px-2 py-1 rounded-full flex-row items-center mr-2">
+                    <Watch size={12} color="#10B981" />
+                    <Text className="text-green-700 text-xs font-medium ml-1">Synced</Text>
+                  </View>
+                )}
                 {isSyncing ? (
                   <ActivityIndicator size="small" color="#3b82f6" />
                 ) : (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={handleSyncData}
-                    disabled={!isConnected}
+                    disabled={!isConnected && !isSmartWatchConnected}
                   >
-                    <RefreshCw size={24} color={isConnected ? "#3b82f6" : "#9ca3af"} />
+                    <RefreshCw
+                      size={20}
+                      color={(isConnected || isSmartWatchConnected) ? '#3b82f6' : '#9ca3af'}
+                    />
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity 
-                  activeOpacity={0.7}
-                  onPress={handleConnectWatch}
-                >
-                  <Watch size={24} color={isConnected ? "#10b981" : "#9ca3af"} />
-                </TouchableOpacity>
               </View>
             </View>
-
-            {isConnected && (
-              <View className="bg-emerald-50 rounded-xl p-3 mb-4">
-                <Text className="text-emerald-700 text-sm font-medium">
-                  ✓ Smartwatch Connected
-                </Text>
-              </View>
-            )}
 
             <Text className="text-5xl font-bold text-gray-900 mb-4">{steps.toLocaleString()}</Text>
 
             <View className="h-3 bg-gray-100 rounded-full overflow-hidden mb-2">
-              <View 
+              <View
                 className="h-full bg-blue-500 rounded-full"
                 style={{ width: `${Math.min(stepsPercentage, 100)}%` }}
               />
@@ -145,73 +240,6 @@ export default function ActivityScreen() {
             <Text className="text-sm text-gray-500">
               {Math.max(stepsGoal - steps, 0).toLocaleString()} steps to goal
             </Text>
-          </View>
-        </View>
-
-        {/* Calories Burned */}
-        <View className="px-6 mb-4">
-          <View className="bg-orange-500 rounded-2xl p-6">
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-white/80 text-sm mb-1">Total Calories Burned</Text>
-                <Text className="text-white text-4xl font-bold">{caloriesBurned}</Text>
-                <Text className="text-white/80 text-sm mt-1">From activities today</Text>
-              </View>
-              <View className="bg-white/20 rounded-full w-16 h-16 items-center justify-center">
-                <Dumbbell size={32} color="#ffffff" />
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Exercise Log */}
-        <View className="px-6 mb-6">
-          <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-lg font-semibold text-gray-900">Exercise Log</Text>
-            <TouchableOpacity 
-              className="bg-emerald-500 rounded-full w-10 h-10 items-center justify-center"
-              activeOpacity={0.7}
-              onPress={() => setAddExerciseModalVisible(true)}
-            >
-              <Plus size={20} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
-
-          {exercises.map((exercise, index) => (
-            <View
-              key={index}
-              className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-3"
-            >
-              <View className="flex-row justify-between items-start mb-2">
-                <Text className="text-base font-semibold text-gray-900 flex-1">{exercise.name}</Text>
-                <Text className="text-sm text-gray-500">{exercise.time}</Text>
-              </View>
-              <View className="flex-row items-center">
-                <View className="bg-blue-50 rounded-full px-3 py-1 mr-2">
-                  <Text className="text-blue-700 text-sm">{exercise.duration} min</Text>
-                </View>
-                <View className="bg-orange-50 rounded-full px-3 py-1">
-                  <Text className="text-orange-700 font-semibold text-sm">{exercise.calories} cal</Text>
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Quick Add Exercise */}
-        <View className="px-6 pb-6">
-          <Text className="text-lg font-semibold text-gray-900 mb-4">Quick Add</Text>
-          <View className="flex-row flex-wrap gap-2">
-            {['Walking', 'Running', 'Cycling', 'Swimming', 'Yoga', 'Gym'].map((activity) => (
-              <TouchableOpacity
-                key={activity}
-                className="bg-white rounded-full px-5 py-3 border border-gray-200"
-                activeOpacity={0.7}
-                onPress={() => handleQuickAdd(activity)}
-              >
-                <Text className="text-gray-700 font-medium">{activity}</Text>
-              </TouchableOpacity>
-            ))}
           </View>
         </View>
       </ScrollView>
